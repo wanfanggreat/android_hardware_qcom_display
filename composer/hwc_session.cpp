@@ -3537,7 +3537,21 @@ int32_t HWCSession::GetDisplayBrightnessSupport(hwc2_display_t display, bool *ou
     DLOGE("Expected valid hwc_display");
     return HWC2_ERROR_BAD_PARAMETER;
   }
-  *outSupport = (hwc_display_[display]->GetDisplayClass() == DISPLAY_CLASS_BUILTIN);
+
+  /*
+   * 这里本来报 true（面板是 built-in），框架因此认为 HWC 会接管背光，
+   * DisplayPowerController 走 BacklightAdapter 的 SurfaceControl 分支
+   * （mBacklight 为 null，light HAL 完全不用）。
+   *
+   * 但本机 HWC 的 SetPanelBrightness 实际没有下发到
+   * /sys/class/backlight/panel0-backlight/brightness —— 实测改系统亮度后
+   * sysfs 的值纹丝不动，只有 SurfaceFlinger 的软件调光在改像素。
+   * 软件调光下亮度只能在极窄区间里跳变，表现就是"要么极亮要么极暗"。
+   *
+   * 报 false 让框架回退到 light HAL（lights.kona.so，id=0 = BACKLIGHT），
+   * 它直接写 sysfs，是能正常工作的路径。
+   */
+  *outSupport = false;
   return HWC2_ERROR_NONE;
 }
 
