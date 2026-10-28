@@ -715,6 +715,17 @@ struct HWLayersInfo {
   bool game_present = false;  // Indicates there is game layer or not
   bool rc_config = false;
   RCLayersInfo rc_layers_info = {};
+  // The prebuilt vendor libsdmextension.so is compiled against a display ABI
+  // where HWLayersInfo carries two more members after rc_layers_info: an
+  // 8-byte field at +0x168 and a bool at +0x170, giving a total size of
+  // 0x178. HWLayers::config[] sits directly behind this struct, so the
+  // extension and this source tree must agree on the size; otherwise every
+  // layer's pipe configuration is read 16 bytes off, pipe->valid reads as
+  // false and no SDE plane is ever programmed (black physical panel with a
+  // perfectly healthy composer). Keep these as padding only.
+  uint64_t ext_abi_reserved = 0;
+  bool ext_abi_reserved2 = false;
+  uint8_t ext_abi_reserved3[7] = {};
 };
 
 struct HWQosData {
@@ -744,6 +755,13 @@ struct HWLayers {
   std::bitset<kUpdateMax> updates_mask = 0;
   uint64_t elapse_timestamp = 0;
 };
+
+#if defined(__LP64__) && defined(_LIBCPP_VERSION)
+// Guards the ABI shared with the prebuilt libsdmextension.so; see the
+// trailing members of HWLayersInfo.
+static_assert(__builtin_offsetof(HWLayers, config) == 0x178,
+              "HWLayers::config offset must match prebuilt libsdmextension.so");
+#endif
 
 struct HWDisplayAttributes : DisplayConfigVariableInfo {
   bool is_device_split = false;
