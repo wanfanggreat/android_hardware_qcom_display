@@ -61,6 +61,8 @@
 #include <utils/rect.h>
 #include <utils/utils.h>
 
+#include <unistd.h>
+
 #include <algorithm>
 #include <functional>
 #include <map>
@@ -998,6 +1000,18 @@ std::vector<int32_t> DppsInfo::display_id_ = {};
 void DppsInfo::Init(DppsPropIntf *intf, const std::string &panel_name) {
   std::lock_guard<std::mutex> guard(lock_);
   int error = 0;
+
+  // Prebuilt libdpps dereferences a null XML parser when the per-panel LTM
+  // config is missing.  Fall back to the dummy implementation so the
+  // composer can still bring up the display (DPPS/LTM features disabled).
+  std::string ltm_xml = "/vendor/etc/ltm_config_" + panel_name + ".xml";
+  if (access(ltm_xml.c_str(), R_OK) != 0) {
+    DLOGW("LTM config %s not found; disabling DPPS", ltm_xml.c_str());
+    if (!dpps_intf_) {
+      dpps_intf_ = new DppsDummyImpl();
+    }
+    return;
+  }
 
   if (!intf) {
     DLOGE("Invalid intf is null");
